@@ -17,6 +17,7 @@ import io.flutter.plugin.common.PluginRegistry.Registrar
 class FlutterWebAuthPlugin(private var context: Context? = null, private var channel: MethodChannel? = null): MethodCallHandler, FlutterPlugin {
   companion object {
     val callbacks = mutableMapOf<String, Result>()
+    var currentTab: CustomTabsIntent.CustomTabsSession? = null
 
     @JvmStatic
     fun registerWith(registrar: Registrar) {
@@ -53,18 +54,23 @@ class FlutterWebAuthPlugin(private var context: Context? = null, private var cha
           val intent = CustomTabsIntent.Builder().build()
           val keepAliveIntent = Intent(context, KeepAliveService::class.java)
 
-          //intent.intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-          intent.intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-
+          intent.intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
           if (preferEphemeral) {
               intent.intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
           }
-//          intent.intent.putExtra("android.support.customtabs.extra.KEEP_ALIVE", keepAliveIntent)
+          intent.intent.putExtra("android.support.customtabs.extra.KEEP_ALIVE", keepAliveIntent)
 
+          currentTab = intent?.session
           intent.launchUrl(context!!, url)
         }
         "cleanUpDanglingCalls" -> {
-          callbacks.forEach{ (_, danglingResultCallback) ->
+            currentTab?.let { tab ->
+                tab.mayLaunchUrl(Uri.parse("about:blank"), null, null)
+                tab.finish()
+                currentTab = null
+            }
+
+            callbacks.forEach{ (_, danglingResultCallback) ->
               danglingResultCallback.error("CANCELED", "User canceled login", null)
           }
           callbacks.clear()
